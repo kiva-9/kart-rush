@@ -1,0 +1,25 @@
+{
+  "name": "kart-rush",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kart Rush - an AAA-style Three.js kart racing game (Mario Kart homage)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "node scripts/check.mjs",
+    "test:logic": "node scripts/test-logic.mjs",
+    "test:integration": "node scripts/test-integration.mjs",
+    "test:ui": "node scripts/test-ui.mjs",
+    "test:browser": "node scripts/browser-test.mjs",
+    "test": "node scripts/check.mjs && node scripts/test-logic.mjs && node scripts/test-integration.mjs && node scripts/test-ui.mjs",
+    "build:offline": "node scripts/build-offline.mjs"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

@@ -1,0 +1,64 @@
+# Build the game and publish it to GitHub Pages.
+#
+# Source of truth is `main`; the artifact is the normal Vite build (`dist/`).
+# `vite.config.js` already sets `base: './'`, so every asset URL is relative and
+# the site works from a project sub-path (https://<user>.github.io/<repo>/) with
+# no further configuration.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deployment at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the production bundle
+        run: npm run build
+
+      # Fail the deploy loudly if the build produced nothing, rather than
+      # publishing an empty page.
+      - name: Sanity-check the output
+        run: |
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          test -n "$(find dist/assets -name '*.js' -print -quit)" || { echo "no JS bundle"; exit 1; }
+          echo "build output:" && du -sh dist && ls dist dist/assets
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
