@@ -1,5 +1,8 @@
 # Kart Rush — Turbo Championship
 
+**Play it: <https://kiva-9.github.io/kart-rush/>** — no install, no server, no
+network after the first load.
+
 An AAA-style 3D kart racer that runs entirely in the browser, built with **Three.js 0.170**
 and Vite. It is an homage to the 1990s/2000s console kart-racing tradition: original
 characters, original circuits, arcade physics, drifting with mini-turbos, a full item
@@ -21,6 +24,7 @@ npm run dev        # http://localhost:5173
 | `npm run preview` | Serve the production build |
 | `npm run check` | Parse-check every module in `src/` (0 external tools) |
 | `npm run build:offline` | **One self-contained HTML file** (~1 MB) that runs from the filesystem |
+| `npm run test:pages` | Drive the **live** GitHub Pages deployment in headless Chrome |
 | `npm test` | All four suites below, in sequence |
 
 Anything below is a "play the game in a real browser" check — see

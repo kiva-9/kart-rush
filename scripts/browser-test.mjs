@@ -31,6 +31,8 @@ const quiet = flag('quiet');
 const extraFlags = args.filter((a) => a.startsWith('--chrome.')).map((a) => a.slice(9));
 /** Failures from the `--ui` menu walkthrough, folded into the exit status. */
 let uiFail = 0;
+/** Origin-root /favicon.ico 404s that no project Pages site can answer. */
+let faviconNoise = 0;
 
 const CHROME = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -45,7 +47,13 @@ if (!exe) {
   process.exit(2);
 }
 
-const target = file ? 'file://' + (file.startsWith('/') ? file : join(root, file)) : '';
+// An absolute http(s) URL is used verbatim; anything else is resolved to a
+// file:// path relative to the project root.
+const target = /^https?:\/\//.test(file)
+  ? file
+  : file
+    ? 'file://' + (file.startsWith('/') ? file : join(root, file))
+    : '';
 
 const port = 9333 + Math.floor(Math.random() * 500);
 const proc = spawn(exe, [
@@ -122,7 +130,21 @@ function hookEvent(e) {
     return;
   }
   if (e.method === 'Log.entryAdded' && e.params.entry.level === 'error') {
-    errors.push('[log] ' + e.params.entry.text + ' ' + (e.params.entry.url || ''));
+    const text = e.params.entry.text || '';
+    const url = e.params.entry.url || '';
+    // Chrome's favicon service asks the *origin root* for /favicon.ico
+    // regardless of what the page declares, and a project Pages site
+    // (https://<user>.github.io/<repo>/) can never serve that path — it belongs
+    // to the user site. The page itself makes no such request, so it is
+    // environment noise and not something the deployment can fix. Everything
+    // else still counts.
+    const originRootFavicon = /\/favicon\.ico$/.test(url) &&
+      new URL(url).pathname === '/favicon.ico';
+    if (text.includes('404') && originRootFavicon) {
+      faviconNoise++;
+      return;
+    }
+    errors.push('[log] ' + text + ' ' + url);
   }
 }
 
@@ -290,26 +312,34 @@ async function main() {
   const t0 = Date.now();
   let lastCount = -1;
 
-  // Count the fixed-loop `update()` calls against the view-loop `updateView()`
+  // Count the fixed-loop update() calls against the view-loop updateView()
   // calls for the simOnly systems (cameraRig / particles / cameraShake). They
   // are supposed to run once per rendered frame, from updateView only; the
   // inverted guard in Game.step() used to drive them from update() at 1/120 s
   // instead, which halved the camera's motion on a 60 Hz display.
-  await evaluate(`(function () {
-    const g = window.kartRush.game;
-    window.__fx = {};
-    for (const name of ['cameraRig', 'particles', 'cameraShake']) {
-      const sys = g.getSystem(name);
-      if (!sys) continue;
-      const counts = { updateCalls: 0, updateDt: 0, viewCalls: 0, viewDt: 0 };
-      window.__fx[name] = counts;
-      const u = sys.update.bind(sys);
-      const v = sys.updateView.bind(sys);
-      sys.update = function (dt) { counts.updateCalls++; counts.updateDt += dt; return u(dt); };
-      sys.updateView = function (dt) { counts.viewCalls++; counts.viewDt += dt; return v(dt); };
-    }
-    return Object.keys(window.__fx).length;
-  })()`);
+  //
+  // The race builds asynchronously, so the systems may not exist yet — poll for
+  // them rather than silently recording an empty set.
+  let fxInstalled = false;
+  for (let i = 0; i < 40 && !fxInstalled; i++) {
+    const n = await evaluate(`(function () {
+      const g = window.kartRush.game;
+      window.__fx = {};
+      for (const name of ['cameraRig', 'particles', 'cameraShake']) {
+        const sys = g.getSystem(name);
+        if (!sys) continue;
+        const counts = { updateCalls: 0, updateDt: 0, viewCalls: 0, viewDt: 0 };
+        window.__fx[name] = counts;
+        const u = sys.update.bind(sys);
+        const v = sys.updateView.bind(sys);
+        sys.update = function (dt) { counts.updateCalls++; counts.updateDt += dt; return u(dt); };
+        sys.updateView = function (dt) { counts.viewCalls++; counts.viewDt += dt; return v(dt); };
+      }
+      return Object.keys(window.__fx).length;
+    })()`);
+    fxInstalled = n >= 3;
+    if (!fxInstalled) await sleep(500);
+  }
 
   while (Date.now() - t0 < seconds * 1000) {
     await sleep(1000);
@@ -421,6 +451,10 @@ async function main() {
   if (errors.length) {
     console.log('[browser] PAGE ERRORS (' + errors.length + '):');
     for (const e of errors.slice(0, 40)) console.log('   ' + String(e).split('\n').slice(0, 4).join('\n     '));
+  }
+  if (faviconNoise) {
+    console.log('[browser] note: ' + faviconNoise +
+      ' origin-root /favicon.ico 404(s) ignored — no project Pages site can serve that path');
   }
   const fail = errors.length > 0 || consoleLines.some((l) => l.type === 'error') || uiFail > 0;
   console.log('[browser] ' + (fail ? 'FAIL' : 'PASS'));

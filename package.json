@@ -13,6 +13,7 @@
     "test:integration": "node scripts/test-integration.mjs",
     "test:ui": "node scripts/test-ui.mjs",
     "test:browser": "node scripts/browser-test.mjs",
+    "test:pages": "node scripts/browser-test.mjs --file https://kiva-9.github.io/kart-rush/ --seconds 25",
     "test": "node scripts/check.mjs && node scripts/test-logic.mjs && node scripts/test-integration.mjs && node scripts/test-ui.mjs",
     "build:offline": "node scripts/build-offline.mjs"
   },

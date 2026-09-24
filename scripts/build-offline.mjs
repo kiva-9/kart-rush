@@ -69,11 +69,19 @@ function externalise(htmlIn) {
 
   const tags = [
     { re: /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>\s*<\/script\s*>/gi, tag: 'script' },
-    { re: /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi, tag: 'link' },
+    // Only stylesheet links are external resources. A data-URI href (the inline
+    // favicon) has no file to read and must be left alone, or the inliner looks
+    // for a build output that does not exist.
+    {
+      re: /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi,
+      tag: 'link',
+      skip: (src) => /^data:/i.test(src),
+    },
   ];
 
-  for (const { re, tag } of tags) {
+  for (const { re, tag, skip } of tags) {
     shell = shell.replace(re, (whole, src) => {
+      if (skip && skip(src)) return whole;
       const name = src.split('/').pop().split('?')[0];
       const file = byName.get(name);
       if (!file) {
@@ -118,9 +126,10 @@ if (style.includes('</style')) style = style.replace(/<\/style/gi, '<\\/style');
 
 // Sanity, on the shell only: nothing may still be loaded from outside. It runs
 // before the bodies are spliced in, because the game's own JS legitimately
-// contains src= and href= inside template strings.
+// contains src= and href= inside template strings. A data-URI href (the inline
+// favicon) is the one external-looking attribute that must survive.
 if (/<script\b[^>]*\bsrc=/i.test(shell)) die('a <script src=...> survived');
-if (/<link\b[^>]*\bhref=/i.test(shell)) die('a <link href=...> survived');
+if (/<link\b[^>]*\bhref=(?!["']?data:)/i.test(shell)) die('a <link href=...> survived');
 
 // Spliced with a function replacement on purpose: with a string replacement,
 // `$` sequences inside the minified bundle ($`, $&, $', $1) would be
